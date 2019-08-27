@@ -26,6 +26,8 @@ def traj_segment_generator(pi, env, horizon, stochastic):
     # Initialize state variables
     t = 0
     ac = env.action_space.sample()
+    if isinstance(ac, tuple):
+        ac = np.concatenate(list(ac))
     new = True
     rew = [0.0, 0.0]
     ob = env.reset()
@@ -119,7 +121,7 @@ def learn(*,
         ent_coef=0.0,
         cg_damping=1e-2,
         vf_stepsize=3e-4,
-        vf_iters=5,
+        vf_iters=3,
         max_episodes=0, max_iters=0,  # time constraint
         callback=None,
         load_path=None,
@@ -302,6 +304,7 @@ def learn(*,
     seg_gen = traj_segment_generator(pi, env, timesteps_per_batch, stochastic=True)
 
     global episodes_so_far, timesteps_so_far, iters_so_far
+    eps = 1e-8
     backtrack_ratio = 0.8
     episodes_so_far = 0
     timesteps_so_far = 0
@@ -334,7 +337,7 @@ def learn(*,
 
         # ob, ac, atarg, sfatarg, T = map(np.concatenate, (obs, acs, atargs, sfatarg, T))
         ob, ac, atarg, T = seg["ob"], seg["ac"], seg["adv"], seg["T"]
-        atarg = (atarg - atarg.mean()) / atarg.std() # standardized advantage function estimate
+        atarg = (atarg - atarg.mean()) / (atarg.std() + eps) # standardized advantage function estimate
 
         args = seg["ob"], seg["ac"], atarg, seg["T"]
         fvpargs = [arr[::5] for arr in args[:3]]
@@ -364,8 +367,6 @@ def learn(*,
         approx_g = fisher_vector_product(v)
         q = v.dot(approx_g) # approx = g^T H^{-1} g
         delta = 2 * max_kl
-
-        eps = 1e-8
 
         # residual = np.sqrt((approx_g - g).dot(approx_g - g))
         # rescale  = q / (v.dot(v))
