@@ -227,9 +227,9 @@ def learn(*,
     ratio = tf.exp(pi.pd.logp(ac) - oldpi.pd.logp(ac)) # advantage * pnew / pold
     surrloss = - tf.reduce_mean(ratio * atarg[:,0])
     surrsafe = tf.reduce_mean(ratio * atarg[:,1]) * T
-    loss = surrloss - entbonus
-    losssafety = [loss, meankl, surrsafe, entbonus, surrloss, meanent]
-    losssafety_names = ["loss", "meankl", "surrsafe", "entbonus", "surrloss", "entropy"]
+    losses = surrloss - entbonus
+    losssafety = [losses, meankl, surrsafe, entbonus, surrloss, meanent]
+    losssafety_names = ["losses", "meankl", "surrsafe", "entbonus", "surrloss", "entropy"]
 
     dist = meankl
 
@@ -259,7 +259,7 @@ def learn(*,
         for (oldv, newv) in zipsame(get_variables("oldpi"), get_variables("pi"))])
 
     compute_losssafety = U.function([ob, ac, atarg, T], losssafety)
-    compute_losssandgrad = U.function([ob, ac, atarg, T], [loss, U.flatgrad(loss, var_list)])
+    compute_losssandgrad = U.function([ob, ac, atarg, T], [losses, U.flatgrad(losses, var_list)])
     compute_safetyandgrad = U.function([ob, ac, atarg, T], [surrsafe, U.flatgrad(surrsafe, var_list)])
     compute_vflossandgrad = U.function([ob, ret], U.flatgrad(vferr, vf_var_list))
     compute_fvp = U.function([flat_tangent, ob, ac, atarg, T], fvp)
@@ -606,6 +606,12 @@ def learn(*,
             logger.record_tabular("EpLenMean", np.mean(lenbuffer))
             logger.record_tabular("EpRewMean", np.mean(rewbuffer))
             logger.record_tabular("EpSftMean", np.mean(sftbuffer))
+
+            loss, kl, safety, _, _, entropy = compute_losssafety(*args)
+            logger.record_tabular("EvalLoss", loss)
+            logger.record_tabular("EvalSafety", safety)
+            logger.record_tabular("EvalKL", kl)
+            logger.record_tabular("EvalEntropy", entropy)
 
             episodes_so_far += len(lens)
             timesteps_so_far += sum(lens)
